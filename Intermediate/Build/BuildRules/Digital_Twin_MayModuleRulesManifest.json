@@ -1,0 +1,11 @@
+{
+	"SourceFiles": [
+		"C:\\Users\\sahan\\OneDrive\\Desktop\\Digital_Twin_May-20250108T105741Z-001\\Digital_Twin_May 5.5\\Plugins\\SocketIOClient\\Source\\CoreUtility\\CoreUtility.Build.cs",
+		"C:\\Users\\sahan\\OneDrive\\Desktop\\Digital_Twin_May-20250108T105741Z-001\\Digital_Twin_May 5.5\\Plugins\\SocketIOClient\\Source\\SIOJEditorPlugin\\SIOJEditorPlugin.Build.cs",
+		"C:\\Users\\sahan\\OneDrive\\Desktop\\Digital_Twin_May-20250108T105741Z-001\\Digital_Twin_May 5.5\\Plugins\\SocketIOClient\\Source\\SIOJson\\SIOJson.Build.cs",
+		"C:\\Users\\sahan\\OneDrive\\Desktop\\Digital_Twin_May-20250108T105741Z-001\\Digital_Twin_May 5.5\\Plugins\\SocketIOClient\\Source\\SocketIOClient\\SocketIOClient.Build.cs",
+		"C:\\Users\\sahan\\OneDrive\\Desktop\\Digital_Twin_May-20250108T105741Z-001\\Digital_Twin_May 5.5\\Plugins\\SocketIOClient\\Source\\SocketIOLib\\SocketIOLib.Build.cs",
+		"C:\\Users\\sahan\\OneDrive\\Desktop\\Digital_Twin_May-20250108T105741Z-001\\Digital_Twin_May 5.5\\Plugins\\UDP-Unreal\\Source\\UDPWrapper\\UDPWrapper.Build.cs"
+	],
+	"EngineVersion": "5.5.1"
+}
