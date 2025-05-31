@@ -1,0 +1,177 @@
+/*
+# Combined Voltage, Current, and Temperature Sensor with ESP32 and ThingSpeak
+
+This program reads voltage, current, and temperature from a battery using an ESP32-WROOM-32
+and sends the data to ThingSpeak using WiFi.
+
+## Hardware Setup
+- Voltage Sensor: Divider (R1=22kΩ, R2=33kΩ) on GPIO 32 (ADC1_CH4), across battery
+- Current Sensor: ACS712 (5A) on GPIO 35 (ADC1_CH7), in series with battery positive and load
+- Temperature Sensor: MAX6675 with K-type thermocouple, CS to GPIO 15, SO to GPIO 12, SCK to GPIO 14
+- Power: Supplied from Arduino Uno R3 (3.3V)
+- Ground: Common GND between ESP32, sensors, Uno, and battery
+
+## Libraries Required
+- WiFi.h (included with ESP32 board package)
+- ThingSpeak.h (install via Library Manager)
+- max6675.h (Adafruit MAX6675 library, install via Library Manager)
+*/
+
+#include <WiFi.h>
+#include <ThingSpeak.h>
+#include <max6675.h>
+
+// Pin and Constants
+const int voltagePin = 34; // GPIO 32 (ADC1_CH4) for battery voltage
+const int currentPin = 35; // GPIO 35 (ADC1_CH7) for battery current (ACS712)
+const float voltageDividerRatio = 0.2; // R2/(R1+R2), R1=22k, R2=33k
+const float voltageCalibration = 0.18; // Voltage calibration offset
+const float referenceVoltage = 3.3; // ESP32 reference voltage
+const float adcResolution = 4095.0; // ESP32 ADC is 12-bit
+const float acs712Sensitivity = 0.185; // 185mV/A for 5A ACS712
+const int numReadings = 10; // Number of readings to average
+
+// MAX6675 Pins
+int thermoDO = 12; // SO (MISO)
+int thermoCS = 15; // CS
+int thermoCLK = 14; // SCK
+MAX6675 thermocouple(thermoCLK, thermoCS, thermoDO);
+
+// ThingSpeak and WiFi Credentials
+const char* thingSpeakApiKey = "2VHTOPCCBSF8UOQ2"; // Write API Key
+const long channelID = 2972980; // ThingSpeak Channel ID
+const char* ssid = "4422"; // WiFi SSID
+const char* password = "rolex?red21"; // WiFi Password
+
+WiFiClient client;
+
+/*
+## Setup Function
+Initializes Serial communication, ThingSpeak client, WiFi, and sensors.
+*/
+void setup() {
+  Serial.begin(115200);
+  pinMode(voltagePin, INPUT); // Set pin for analog reading
+  pinMode(currentPin, INPUT); // Set pin for analog reading
+  ThingSpeak.begin(client);
+  connectToWiFi();
+  Serial.println("Setup completed.");
+}
+
+/*
+## Loop Function
+Reads battery voltage, current, and temperature every 20 seconds and sends to ThingSpeak.
+*/
+void loop() {
+  WiFi.mode(WIFI_OFF); // Disable WiFi to reduce ADC noise
+  float batteryVoltage = readVoltage();
+  delay(5); // Minimal delay for ADC stability
+  float batteryCurrent = readCurrent();
+  delay(5); // Minimal delay for stability
+  float temperature = readTemperature();
+  WiFi.mode(WIFI_STA); // Re-enable WiFi
+  connectToWiFi(); // Reconnect if needed
+  sendDataToThingSpeak(batteryVoltage, batteryCurrent, temperature);
+  delay(15000); // ThingSpeak free tier: min 15s between updates
+}
+
+/*
+## Read Voltage Function
+Reads battery voltage via divider on GPIO 32, averages readings, applies calibration.
+Returns: Battery voltage in volts (float)
+*/
+float readVoltage() {
+  long totalValue = 0;
+  for (int i = 0; i < numReadings; i++) {
+    totalValue += analogRead(voltagePin);
+    delay(10); // Settling time
+  }
+  int sensorValue = totalValue / numReadings; // Average the readings
+  Serial.print("Raw ADC Voltage: ");
+  Serial.println(sensorValue); // Debug raw ADC value
+  float voltageAtPin = (sensorValue * referenceVoltage) / adcResolution; // Voltage at GPIO 32
+  Serial.print("Voltage at Pin: ");
+  Serial.print(voltageAtPin, 2);
+  Serial.println(" V"); // Debug voltage at pin
+  float batteryVoltage = (voltageAtPin / voltageDividerRatio) - voltageCalibration; // Apply divider and calibration
+  Serial.print("Battery Voltage: ");
+  Serial.print(batteryVoltage, 2);
+  Serial.println(" V");
+  return batteryVoltage;
+}
+
+/*
+## Read Current Function
+Reads battery current via ACS712 on GPIO 35, averages readings, converts to mA.
+Returns: Battery current in mA (float)
+*/
+float readCurrent() {
+  long totalValue = 0;
+  for (int i = 0; i < numReadings; i++) {
+    totalValue += analogRead(currentPin);
+    delay(10); // Settling time
+  }
+  int rawValue = totalValue / numReadings; // Average the readings
+  float voltage = (rawValue * referenceVoltage) / adcResolution; // Convert to voltage
+  float batteryCurrent = ((voltage - (referenceVoltage / 2)) / acs712Sensitivity) * 1000; // ACS712: 185mV/A, centered at Vref/2, convert to mA
+  Serial.print("Battery Current: ");
+  Serial.print(batteryCurrent, 2);
+  Serial.println(" mA");
+  return batteryCurrent;
+}
+
+/*
+## Read Temperature Function
+Reads temperature via MAX6675 on SPI pins.
+Returns: Temperature in Celsius (float)
+*/
+float readTemperature() {
+  float temperature = thermocouple.readCelsius();
+  if (isnan(temperature)) {
+    Serial.println("Failed to read temperature!");
+    return 0.0;
+  }
+  Serial.print("Temperature: ");
+  Serial.print(temperature, 2);
+  Serial.println(" C");
+  return temperature;
+}
+
+/*
+## Connect to WiFi Function
+Attempts to connect to WiFi. Restarts ESP32 if connection fails.
+*/
+void connectToWiFi() {
+  if (WiFi.status() != WL_CONNECTED) {
+    WiFi.begin(ssid, password);
+    Serial.print("Connecting to WiFi");
+    int attempts = 0;
+    while (WiFi.status() != WL_CONNECTED && attempts < 20) {
+      delay(500);
+      Serial.print(".");
+      attempts++;
+    }
+    if (WiFi.status() == WL_CONNECTED) {
+      Serial.println("\nConnected to WiFi");
+    } else {
+      Serial.println("\nFailed to connect to WiFi. Restarting...");
+      ESP.restart();
+    }
+  }
+}
+
+/*
+## Send Data to ThingSpeak Function
+Sends battery voltage, current, and temperature to ThingSpeak fields 1, 2, and 3.
+*/
+void sendDataToThingSpeak(float batteryVoltage, float batteryCurrent, float temperature) {
+  ThingSpeak.setField(1, batteryVoltage); // Field 1: Voltage
+  ThingSpeak.setField(2, batteryCurrent); // Field 2: Current
+  ThingSpeak.setField(3, temperature); // Field 3: Temperature
+  int status = ThingSpeak.writeFields(channelID, thingSpeakApiKey);
+  if (status == 200) {
+    Serial.println("Data sent to ThingSpeak successfully.");
+  } else {
+    Serial.println("Error sending data: " + String(status));
+  }
+}
